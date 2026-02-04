@@ -30,6 +30,14 @@ app = FastAPI()
 # ---------- DISCORD EVENTS ----------
 
 @client.event
+async def on_connect():
+    print("🔌 Discord websocket connected")
+    
+@client.event
+async def on_disconnect():
+    print("❌ Discord disconnected")
+
+@client.event
 async def on_ready():
     guild = discord.Object(id=GUILD_ID)
 
@@ -87,4 +95,5 @@ async def deliver_script(data: dict):
 
 @app.on_event("startup")
 async def startup_event():
+    print("🚀 FastAPI startup event fired")
     asyncio.create_task(client.start(DISCORD_TOKEN))
