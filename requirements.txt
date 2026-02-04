@@ -1,6 +1,5 @@
-os
-discord
+discord.py
 aiohttp
-asyncio
 fastapi
-dotenv
+uvicorn
+python-dotenv
