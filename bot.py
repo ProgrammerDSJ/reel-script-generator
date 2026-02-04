@@ -41,6 +41,9 @@ async def on_disconnect():
 async def on_ready():
     print([cmd.name for cmd in tree.get_commands()])
     guild = discord.Object(id=GUILD_ID)
+    
+    guild = client.get_guild(GUILD_ID)
+    print("Bot is in guild:", guild.name if guild else "NO")
 
     # Clear + sync commands ONLY to this guild (instant visibility)
     tree.clear_commands(guild=guild)
