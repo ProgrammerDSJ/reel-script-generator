@@ -2,6 +2,7 @@ import os
 import asyncio
 import aiohttp
 import discord
+from discord.ext import commands
 from discord import app_commands
 from fastapi import FastAPI
 from dotenv import load_dotenv
@@ -17,11 +18,10 @@ GUILD_ID = int(os.getenv("GUILD_ID"))
 if not DISCORD_TOKEN or not MAKE_WEBHOOK_URL or not GUILD_ID:
     raise RuntimeError("Missing required environment variables")
 
-# ---------- DISCORD SETUP ----------
+# ---------- DISCORD BOT ----------
 
 intents = discord.Intents.default()
-client = discord.Client(intents=intents)
-tree = app_commands.CommandTree(client)
+bot = commands.Bot(command_prefix="!", intents=intents)
 
 # ---------- FASTAPI ----------
 
@@ -29,7 +29,7 @@ app = FastAPI()
 
 # ---------- SLASH COMMAND ----------
 
-@tree.command(name="script", description="Generate a script from an incident")
+@bot.tree.command(name="script", description="Generate a script from an incident")
 @app_commands.describe(incident="Describe the incident")
 async def script(interaction: discord.Interaction, incident: str):
     await interaction.response.defer(thinking=True)
@@ -53,18 +53,19 @@ async def script(interaction: discord.Interaction, incident: str):
         await interaction.followup.send("❌ Failed to send request.")
         print("Webhook error:", e)
 
-# ---------- DISCORD EVENTS ----------
+# ---------- BOT EVENTS ----------
 
-@client.event
+@bot.event
 async def on_ready():
     guild = discord.Object(id=GUILD_ID)
 
-    # Sync ONLY to this guild (instant visibility)
-    await tree.sync(guild=guild)
+    # Copy global commands → guild (instant visibility)
+    bot.tree.copy_global_to(guild=guild)
+    await bot.tree.sync(guild=guild)
 
-    print("Commands in guild:", [cmd.name for cmd in tree.get_commands(guild=guild)])
-    print("Bot is in guild:", client.get_guild(GUILD_ID).name)
-    print(f"🤖 Logged in as {client.user}")
+    print("Commands in guild:", [c.name for c in bot.tree.get_commands(guild=guild)])
+    print("Bot is in guild:", bot.get_guild(GUILD_ID).name)
+    print(f"🤖 Logged in as {bot.user}")
 
 # ---------- MAKE → DISCORD CALLBACK ----------
 
@@ -73,7 +74,7 @@ async def deliver_script(data: dict):
     channel_id = int(data.get("channel_id"))
     script = data.get("script")
 
-    channel = client.get_channel(channel_id)
+    channel = bot.get_channel(channel_id)
     if channel and script:
         await channel.send(f"🎬 **Your Script**\n\n{script}")
 
@@ -84,4 +85,4 @@ async def deliver_script(data: dict):
 @app.on_event("startup")
 async def startup_event():
     print("🚀 FastAPI startup event fired")
-    asyncio.create_task(client.start(DISCORD_TOKEN))
+    asyncio.create_task(bot.start(DISCORD_TOKEN))
