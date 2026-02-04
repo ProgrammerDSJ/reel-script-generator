@@ -39,8 +39,8 @@ async def on_disconnect():
 
 @client.event
 async def on_ready():
-    print([cmd.name for cmd in tree.get_commands()])
     guild = discord.Object(id=GUILD_ID)
+    print([cmd.name for cmd in tree.get_commands(guild=guild)])
     
     guild = client.get_guild(GUILD_ID)
     print("Bot is in guild:", guild.name if guild else "NO")
