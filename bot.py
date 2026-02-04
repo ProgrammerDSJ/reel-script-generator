@@ -10,6 +10,7 @@ load_dotenv()
 
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 MAKE_WEBHOOK_URL = os.getenv("MAKE_WEBHOOK_URL")
+GUILD_ID=os.getenv("GUILD_ID")
 
 intents = discord.Intents.default()
 client = discord.Client(intents=intents)
@@ -55,3 +56,11 @@ async def deliver_script(data: dict):
 @app.on_event("startup")
 async def startup_event():
     asyncio.create_task(client.start(DISCORD_TOKEN))
+    
+@client.event
+async def on_ready():
+    guild = discord.Object(id=GUILD_ID)
+    tree.copy_global_to(guild=guild)
+    await tree.sync(guild=guild)
+    print(f"Commands synced to guild {GUILD_ID}")
+    print(f"Logged in as {client.user}")
