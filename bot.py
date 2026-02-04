@@ -12,7 +12,7 @@ load_dotenv()
 
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 MAKE_WEBHOOK_URL = os.getenv("MAKE_WEBHOOK_URL")
-GUILD_ID = int(os.getenv("GUILD_ID"))  # MUST be int
+GUILD_ID = int(os.getenv("GUILD_ID"))
 
 if not DISCORD_TOKEN or not MAKE_WEBHOOK_URL or not GUILD_ID:
     raise RuntimeError("Missing required environment variables")
@@ -27,38 +27,9 @@ tree = app_commands.CommandTree(client)
 
 app = FastAPI()
 
-# ---------- DISCORD EVENTS ----------
-
-@client.event
-async def on_connect():
-    print("🔌 Discord websocket connected")
-    
-@client.event
-async def on_disconnect():
-    print("❌ Discord disconnected")
-
-@client.event
-async def on_ready():
-    guild = discord.Object(id=GUILD_ID)
-    print([cmd.name for cmd in tree.get_commands(guild=guild)])
-    
-    guild = client.get_guild(GUILD_ID)
-    print("Bot is in guild:", guild.name if guild else "NO")
-
-    # Clear + sync commands ONLY to this guild (instant visibility)
-    tree.clear_commands(guild=guild)
-    await tree.sync(guild=guild)
-
-    print(f"✅ Commands synced to guild {GUILD_ID}")
-    print(f"🤖 Logged in as {client.user}")
-
 # ---------- SLASH COMMAND ----------
 
-@tree.command(
-    name="script",
-    description="Generate a script from an incident",
-)
-
+@tree.command(name="script", description="Generate a script from an incident")
 @app_commands.describe(incident="Describe the incident")
 async def script(interaction: discord.Interaction, incident: str):
     await interaction.response.defer(thinking=True)
@@ -81,6 +52,19 @@ async def script(interaction: discord.Interaction, incident: str):
     except Exception as e:
         await interaction.followup.send("❌ Failed to send request.")
         print("Webhook error:", e)
+
+# ---------- DISCORD EVENTS ----------
+
+@client.event
+async def on_ready():
+    guild = discord.Object(id=GUILD_ID)
+
+    # Sync ONLY to this guild (instant visibility)
+    await tree.sync(guild=guild)
+
+    print("Commands in guild:", [cmd.name for cmd in tree.get_commands(guild=guild)])
+    print("Bot is in guild:", client.get_guild(GUILD_ID).name)
+    print(f"🤖 Logged in as {client.user}")
 
 # ---------- MAKE → DISCORD CALLBACK ----------
 
