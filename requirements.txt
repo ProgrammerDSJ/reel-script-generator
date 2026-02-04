@@ -1,0 +1,6 @@
+os
+discord
+aiohttp
+asyncio
+fastapi
+dotenv

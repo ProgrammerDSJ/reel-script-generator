@@ -1,74 +1,57 @@
 import os
 import discord
 import aiohttp
+import asyncio
+from fastapi import FastAPI
 from discord import app_commands
 from dotenv import load_dotenv
 
 load_dotenv()
 
-TOKEN = os.getenv("DISCORD_TOKEN")
+DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 MAKE_WEBHOOK_URL = os.getenv("MAKE_WEBHOOK_URL")
 
-class MyClient(discord.Client):
-    def __init__(self):
-        intents = discord.Intents.default()
-        super().__init__(intents=intents)
-        self.tree = app_commands.CommandTree(self)
+intents = discord.Intents.default()
+client = discord.Client(intents=intents)
+tree = app_commands.CommandTree(client)
 
-    async def setup_hook(self):
-        await self.tree.sync()
+app = FastAPI()
 
-client = MyClient()
+# ---------- DISCORD BOT ----------
 
-@client.tree.command(name="script", description="Generate a script from an incident")
-@app_commands.describe(incident="Describe the incident in detail")
+@client.event
+async def on_ready():
+    await tree.sync()
+    print(f"Logged in as {client.user}")
+
+@tree.command(name="script", description="Generate a script from an incident")
+@app_commands.describe(incident="Describe the incident")
 async def script(interaction: discord.Interaction, incident: str):
-
-    # Acknowledge immediately (important for UX)
     await interaction.response.defer(thinking=True)
 
     payload = {
         "user": interaction.user.name,
         "user_id": interaction.user.id,
+        "channel_id": interaction.channel_id,
         "incident": incident
     }
 
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.post(MAKE_WEBHOOK_URL, json=payload) as resp:
-                if resp.status != 200:
-                    raise Exception("Make webhook failed")
+    async with aiohttp.ClientSession() as session:
+        await session.post(MAKE_WEBHOOK_URL, json=payload)
 
-        await interaction.followup.send(
-            "🧠 Processing your script. I’ll post it here shortly."
-        )
+    await interaction.followup.send("🧠 Processing your script…")
 
-    except Exception as e:
-        await interaction.followup.send(
-            "❌ Something went wrong while sending data for processing."
-        )
-        print(e)
-
-client.run(TOKEN)
-
-from fastapi import FastAPI
-import uvicorn
-import threading
-
-app = FastAPI()
+# ---------- FASTAPI ENDPOINT ----------
 
 @app.post("/deliver")
 async def deliver_script(data: dict):
-    channel_id = int(data["channel_id"])
-    script = data["script"]
-
-    channel = client.get_channel(channel_id)
+    channel = client.get_channel(int(data["channel_id"]))
     if channel:
-        await channel.send(f"🎬 **Your Script**\n\n{script}")
-
+        await channel.send(f"🎬 **Your Script**\n\n{data['script']}")
     return {"status": "ok"}
 
-def run_api():
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+# ---------- STARTUP ----------
 
-threading.Thread(target=run_api).start()
+@app.on_event("startup")
+async def startup_event():
+    asyncio.create_task(client.start(DISCORD_TOKEN))
