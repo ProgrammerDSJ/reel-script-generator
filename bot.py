@@ -57,8 +57,8 @@ async def on_ready():
 @tree.command(
     name="script",
     description="Generate a script from an incident",
-    guild=discord.Object(id=GUILD_ID),
 )
+
 @app_commands.describe(incident="Describe the incident")
 async def script(interaction: discord.Interaction, incident: str):
     await interaction.response.defer(thinking=True)
