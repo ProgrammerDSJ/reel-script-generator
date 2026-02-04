@@ -1,31 +1,52 @@
 import os
-import discord
-import aiohttp
 import asyncio
-from fastapi import FastAPI
+import aiohttp
+import discord
 from discord import app_commands
+from fastapi import FastAPI
 from dotenv import load_dotenv
+
+# ---------- ENV ----------
 
 load_dotenv()
 
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 MAKE_WEBHOOK_URL = os.getenv("MAKE_WEBHOOK_URL")
-GUILD_ID=os.getenv("GUILD_ID")
+GUILD_ID = int(os.getenv("GUILD_ID"))  # MUST be int
+
+if not DISCORD_TOKEN or not MAKE_WEBHOOK_URL or not GUILD_ID:
+    raise RuntimeError("Missing required environment variables")
+
+# ---------- DISCORD SETUP ----------
 
 intents = discord.Intents.default()
 client = discord.Client(intents=intents)
 tree = app_commands.CommandTree(client)
 
+# ---------- FASTAPI ----------
+
 app = FastAPI()
 
-# ---------- DISCORD BOT ----------
+# ---------- DISCORD EVENTS ----------
 
 @client.event
 async def on_ready():
-    await tree.sync()
-    print(f"Logged in as {client.user}")
+    guild = discord.Object(id=GUILD_ID)
 
-@tree.command(name="script", description="Generate a script from an incident")
+    # Clear + sync commands ONLY to this guild (instant visibility)
+    tree.clear_commands(guild=guild)
+    await tree.sync(guild=guild)
+
+    print(f"✅ Commands synced to guild {GUILD_ID}")
+    print(f"🤖 Logged in as {client.user}")
+
+# ---------- SLASH COMMAND ----------
+
+@tree.command(
+    name="script",
+    description="Generate a script from an incident",
+    guild=discord.Object(id=GUILD_ID),
+)
 @app_commands.describe(incident="Describe the incident")
 async def script(interaction: discord.Interaction, incident: str):
     await interaction.response.defer(thinking=True)
@@ -34,21 +55,32 @@ async def script(interaction: discord.Interaction, incident: str):
         "user": interaction.user.name,
         "user_id": interaction.user.id,
         "channel_id": interaction.channel_id,
-        "incident": incident
+        "incident": incident,
     }
 
-    async with aiohttp.ClientSession() as session:
-        await session.post(MAKE_WEBHOOK_URL, json=payload)
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(MAKE_WEBHOOK_URL, json=payload) as resp:
+                if resp.status != 200:
+                    raise RuntimeError("Make webhook failed")
 
-    await interaction.followup.send("🧠 Processing your script…")
+        await interaction.followup.send("🧠 Processing your script…")
 
-# ---------- FASTAPI ENDPOINT ----------
+    except Exception as e:
+        await interaction.followup.send("❌ Failed to send request.")
+        print("Webhook error:", e)
+
+# ---------- MAKE → DISCORD CALLBACK ----------
 
 @app.post("/deliver")
 async def deliver_script(data: dict):
-    channel = client.get_channel(int(data["channel_id"]))
-    if channel:
-        await channel.send(f"🎬 **Your Script**\n\n{data['script']}")
+    channel_id = int(data.get("channel_id"))
+    script = data.get("script")
+
+    channel = client.get_channel(channel_id)
+    if channel and script:
+        await channel.send(f"🎬 **Your Script**\n\n{script}")
+
     return {"status": "ok"}
 
 # ---------- STARTUP ----------
@@ -56,11 +88,3 @@ async def deliver_script(data: dict):
 @app.on_event("startup")
 async def startup_event():
     asyncio.create_task(client.start(DISCORD_TOKEN))
-    
-@client.event
-async def on_ready():
-    guild = discord.Object(id=GUILD_ID)
-    tree.copy_global_to(guild=guild)
-    await tree.sync(guild=guild)
-    print(f"Commands synced to guild {GUILD_ID}")
-    print(f"Logged in as {client.user}")
