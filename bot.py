@@ -39,6 +39,7 @@ async def on_disconnect():
 
 @client.event
 async def on_ready():
+    print([cmd.name for cmd in tree.get_commands()])
     guild = discord.Object(id=GUILD_ID)
 
     # Clear + sync commands ONLY to this guild (instant visibility)
